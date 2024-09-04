@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Financial Calculator</title>
+    <style>
+      @import url("https://fonts.cdnfonts.com/css/satoshi");
+
+      body {
+        font-family: "Satoshi", Arial, sans-serif;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: white;
+      }
+      .calculator-container {
+        display: flex;
+        flex-direction: column;
+        gap: 47px;
+      }
+      .input-section,
+      .results-section {
+        width: 100%;
+        max-height: 571px;
+      }
+      .input-section {
+        max-width: 453px;
+      }
+      .results-section {
+        display: flex;
+        flex-direction: column;
+        max-width: 473px; /* Ensure results section doesn't exceed 575px */
+        width: 100%; /* Allow it to shrink if needed */
+      }
+      .input-group {
+        margin-bottom: 15px;
+      }
+      .input-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+      }
+      .input-col {
+        flex: 1 1 calc(50% - 7.5px);
+        min-width: 140px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        color: #06050f;
+        font-size: 16px;
+        font-weight: 400;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      input {
+        width: 100%;
+        padding: 22px 29px;
+        box-sizing: border-box;
+        font-family: "Satoshi", Arial, sans-serif;
+        font-size: 16px;
+        font-weight: 700;
+        border: 1px solid #06050f;
+        border-radius: 10px;
+      }
+      #chartContainer {
+        width: 100%;
+        height: auto;
+        flex: 1;
+        min-height: 0;
+        margin-bottom: 20px;
+      }
+      #result {
+        font-family: "Satoshi", Arial, sans-serif;
+        width: 100%;
+        box-sizing: border-box; /* Ensure padding is included in width calculation */
+      }
+      .result-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .last-row {
+        margin-bottom: 0;
+      }
+      .result-label {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+      }
+      .result-label-bold {
+        display: flex;
+        align-items: center;
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .result-circle {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+        flex-shrink: 0; /* Prevent circle from shrinking */
+      }
+      .result-value {
+        font-weight: 700;
+        font-size: 16px;
+        white-space: nowrap; /* Prevent wrapping of values */
+      }
+      .result-highlight {
+        font-size: 20px;
+        color: #ff4684;
+      }
+      .divider {
+        border-top: 1px solid #ccc;
+        margin: 15px 0;
+      }
+      @media (min-width: 768px) {
+        .calculator-container {
+          flex-direction: row;
+          align-items: stretch;
+        }
+        .input-section,
+        .results-section {
+          display: flex;
+          flex-direction: column;
+        }
+        .input-section {
+          flex: 0 0 453px;
+        }
+        .results-section {
+          flex: 1;
+          min-width: 0;
+          position: relative;
+        }
+        #chartContainer {
+          flex: 1;
+          min-height: 0;
+        }
+        #result {
+          margin-top: auto;
+        }
+        label {
+          font-size: 18px;
+        }
+        .result-label {
+          font-size: 16px;
+        }
+        .result-value {
+          font-size: 18px;
+        }
+        .result-highlight {
+          font-size: 24px;
+        }
+      }
+      @media (max-width: 480px) {
+        .input-row {
+          flex-direction: column;
+        }
+        .input-col {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="calculator-container">
+      <div class="input-section">
+        <div class="input-group">
+          <label for="years">How many years until you want to retire?</label>
+          <input type="number" id="years" min="1" max="100" value="40" />
+        </div>
+
+        <div class="input-group">
+          <label for="currentValue">What is your portfolio's current value?</label>
+          <input type="text" id="currentValue" inputmode="numeric" value="500000" />
+        </div>
+
+        <div class="input-group">
+          <label for="annualContribution">What is your projected annual contribution?</label>
+          <input type="text" id="annualContribution" inputmode="numeric" value="25000" />
+        </div>
+
+        <div class="input-row">
+          <div class="input-col">
+            <label for="return">Estimated Annual Return</label>
+            <input type="text" id="return" min="0" max="100" step="0.1" value="7" />
+          </div>
+
+          <div class="input-col">
+            <label for="fee">Asset Manager Fee</label>
+            <input type="text" id="fee" min="0" max="100" step="0.1" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="results-section">
+        <div id="chartContainer">
+          <canvas id="myChart"></canvas>
+        </div>
+
+        <div id="result"></div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+    <script>
+      let myChart;
+
+      function formatDollar(amount, scientific = false) {
+        if (scientific && Math.abs(amount) >= 1e8) {
+          const formatted = new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: "USD",
+            notation: "scientific",
+            maximumFractionDigits: 2
+          }).format(amount);
+          // Replace uppercase 'E' with lowercase 'e'
+          return formatted.replace('E', 'e+');
+        }
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(amount);
+      }
+
+      function parseDollar(value) {
+        return parseFloat(value.replace(/[$,]/g, "")) || 0;
+      }
+
+      function formatDollarInputAsYouType(input) {
+        const cursorPosition = input.selectionStart;
+        const oldLength = input.value.length;
+        const unformattedValue = parseDollar(input.value);
+        const formattedValue = formatDollar(unformattedValue);
+        input.value = formattedValue;
+
+        const newLength = input.value.length;
+        const newCursorPosition = cursorPosition - (oldLength - newLength);
+        input.setSelectionRange(newCursorPosition, newCursorPosition);
+      }
+      function parsePercent(value) {
+        const parsedValue = parseFloat(value.replace("%", "").trim());
+        return isNaN(parsedValue) ? 0 : parsedValue;
+      }
+
+      function formatPercentInputAsYouType(input) {
+        // Store the cursor position before formatting
+        let cursorPosition = input.selectionStart;
+
+        // Remove non-numeric characters except for the decimal point
+        let unformattedValue = input.value.replace(/[^0-9.]/g, "");
+
+        // Prevent multiple decimal points
+        const parts = unformattedValue.split(".");
+        if (parts.length > 2) {
+          unformattedValue = parts[0] + "." + parts[1]; // Keep only the first decimal point
+        }
+
+        // If there is a decimal point, limit to one decimal place
+        if (parts.length > 1) {
+          unformattedValue = parts[0] + "." + parts[1].substring(0, 1);
+        }
+
+        // Format the value as a percentage
+        input.value = unformattedValue + "%";
+        // Prevent the cursor from moving past the '%' sign
+        if (cursorPosition > unformattedValue.length) {
+          cursorPosition = unformattedValue.length;
+          // Ensure the cursor position stays within valid bounds
+          input.setSelectionRange(cursorPosition, cursorPosition);
+        }
+      }
+      function handlePercentInputKeyDown(event) {
+        const input = event.target;
+        const cursorPosition = input.selectionStart;
+        const value = input.value;
+        console.log(cursorPosition, value.length);
+
+        // Prevent cursor from moving last character
+        if (cursorPosition === value.length - 1 && event.key === "ArrowRight") {
+          event.preventDefault();
+        }
+      }
+
+      function handlePercentInputClick(event) {
+        const input = event.target;
+        const cursorPosition = input.selectionStart;
+        const value = input.value;
+        console.log(cursorPosition, value.length);
+        console.log(event.type);
+
+        // Prevent cursor from moving last character
+        if (cursorPosition >= value.length) {
+          input.setSelectionRange(cursorPosition - 1, cursorPosition - 1);
+        }
+      }
+
+      function calculate() {
+        const years = parseInt(document.getElementById("years").value);
+        const currentValue = parseDollar(document.getElementById("currentValue").value);
+        const annualContribution = parseDollar(document.getElementById("annualContribution").value);
+        const returnRate = parseFloat(document.getElementById("return").value) / 100;
+        const feeRate = parseFloat(document.getElementById("fee").value) / 100;
+
+        let withoutFees = currentValue;
+        let withFees = currentValue;
+        const withoutFeesY = [currentValue];
+        const withFeesY = [currentValue];
+
+        for (let i = 1; i <= years; i++) {
+          withoutFees = withoutFees * (1 + returnRate) + annualContribution;
+          withFees = withFees * (1 + returnRate - feeRate) + annualContribution;
+          withoutFeesY.push(withoutFees);
+          withFeesY.push(withFees);
+        }
+
+        const moneyLost = withoutFees - withFees;
+        const hourlyRate = moneyLost / years / 3;
+
+        document.getElementById("result").innerHTML = `
+                <div class="result-row">
+                    <div class="result-label">
+                        <div class="result-circle" style="background-color: #8961FA;"></div>
+                        Portfolio value without fees
+                    </div>
+                    <div class="result-value">${formatDollar(withoutFees, true)}</div>
+                </div>
+                <div class="result-row">
+                    <div class="result-label">
+                        <div class="result-circle" style="background-color: #FF4684;"></div>
+                        Portfolio value with current asset manager
+                    </div>
+                    <div class="result-value">${formatDollar(withFees, true)}</div>
+                </div>
+                <div class="divider"></div>
+                <div class="result-row">
+                    <div class="result-label-bold">Money lost in AUM fees:</div>
+                    <div class="result-value result-highlight">${formatDollar(moneyLost, true)}</div>
+                </div>
+                <div class="result-row last-row">
+                    <div class="result-label">Your advisor's effective rate:</div>
+                    <div class="result-value">${formatDollar(hourlyRate, true)}/hour</div>
+                </div>
+            `;
+
+        updateChart(years, withoutFeesY, withFeesY);
+      }
+
+      function updateChart(years, withoutFeesY, withFeesY) {
+        const ctx = document.getElementById("myChart");
+        const currentDate = new Date();
+        const retirementDate = new Date(
+          currentDate.getFullYear() + years,
+          currentDate.getMonth(),
+          currentDate.getDate()
+        );
+        const numDataPoints = Math.min(years * 12, 200);
+
+        const chartDates = [];
+        const chartWithoutFees = [];
+        const chartWithFees = [];
+
+        for (let i = 0; i <= numDataPoints; i++) {
+          const dateIndex = (i * years) / numDataPoints;
+          const date = new Date(currentDate.getTime() + dateIndex * 365.25 * 24 * 60 * 60 * 1000);
+          chartDates.push(date);
+
+          const withoutFeesInterpolated =
+            withoutFeesY[Math.floor(dateIndex)] * (1 - (dateIndex % 1)) +
+            (withoutFeesY[Math.ceil(dateIndex)] || withoutFeesY[withoutFeesY.length - 1]) * (dateIndex % 1);
+          const withFeesInterpolated =
+            withFeesY[Math.floor(dateIndex)] * (1 - (dateIndex % 1)) +
+            (withFeesY[Math.ceil(dateIndex)] || withFeesY[withFeesY.length - 1]) * (dateIndex % 1);
+
+          chartWithoutFees.push(withoutFeesInterpolated);
+          chartWithFees.push(withFeesInterpolated);
+        }
+
+        if (myChart) {
+          myChart.destroy();
+        }
+
+        const middleDate1 = new Date(currentDate.getTime() + (years / 3) * 365.25 * 24 * 60 * 60 * 1000);
+        const middleDate2 = new Date(currentDate.getTime() + (years / 3) * 2 * 365.25 * 24 * 60 * 60 * 1000);
+        const xAxisLabels = (axis) =>
+          (axis.ticks = [currentDate, middleDate1, middleDate2, retirementDate].map((v) => ({ value: v })));
+
+        myChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: chartDates,
+            datasets: [
+              {
+                label: "Without Fees",
+                data: chartWithoutFees,
+                borderColor: "#8961FA",
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                pointHoverRadius: 0,
+              },
+              {
+                label: "With Fees",
+                data: chartWithFees,
+                borderColor: "#FF4684",
+                tension: 0.4,
+                fill: false,
+                pointRadius: 0,
+                pointHoverRadius: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            aspectRatio: 16 / 9,
+            scales: {
+              x: {
+                type: "time",
+                time: {
+                  unit: "year",
+                  displayFormats: {
+                    year: "yyyy",
+                  },
+                },
+                min: currentDate,
+                afterBuildTicks: xAxisLabels,
+                ticks: {
+                  maxRotation: 0,
+                  autoSkip: true,
+                  maxTicksLimit: 4,
+                  font: {
+                    family: "'Satoshi', Arial, sans-serif",
+                    size: 12,
+                  },
+                },
+                grid: {
+                  display: false,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                ticks: {
+                  callback: function (value) {
+                    return formatDollar(value, true);
+                  },
+                  font: {
+                    family: "'Satoshi', Arial, sans-serif",
+                    size: 10,
+                  },
+                },
+                grid: {
+                  display: false,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                enabled: false,
+              },
+            },
+          },
+        });
+      }
+
+      ["currentValue", "annualContribution"].forEach((id) => {
+        const input = document.getElementById(id);
+        formatDollarInputAsYouType(input);
+      });
+
+      ["years", "currentValue", "annualContribution"].forEach((id) => {
+        const input = document.getElementById(id);
+        input.addEventListener("input", function () {
+          if (id === "currentValue" || id === "annualContribution") {
+            formatDollarInputAsYouType(this);
+          }
+          calculate();
+        });
+      });
+
+      ["return", "fee"].forEach((id) => {
+        const input = document.getElementById(id);
+        formatPercentInputAsYouType(input);
+        input.addEventListener("keydown", handlePercentInputKeyDown);
+        input.addEventListener("click", handlePercentInputClick);
+        input.addEventListener("input", function () {
+          formatPercentInputAsYouType(this);
+          calculate();
+        });
+      });
+
+      calculate();
+    </script>
+  </body>
+</html>
